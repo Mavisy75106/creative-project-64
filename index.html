@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taste-Skill — AI Slop Detector Visualizer</title>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --border: #2a2a3a;
+  --text: #e8e8f0;
+  --text-dim: #8888a0;
+  --accent: #f0a040;
+  --accent2: #e06050;
+  --accent3: #50a0e0;
+  --accent4: #80c060;
+  --accent5: #c080e0;
+  --slop-high: #ff4040;
+  --slop-med: #ffa030;
+  --slop-low: #40c0a0;
+  --human: #60e0a0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+#app {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: 1fr;
+  height: 100vh;
+  gap: 0;
+}
+#visualizer-panel {
+  position: relative;
+  overflow: hidden;
+}
+#main-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#title-overlay {
+  position: absolute;
+  top: 24px;
+  left: 28px;
+  pointer-events: none;
+}
+#title-overlay h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--accent);
+  text-shadow: 0 0 30px rgba(240, 160, 64, 0.3);
+}
+#title-overlay .subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+#slop-meter {
+  position: absolute;
+  top: 24px;
+  left: 28px;
+  display: none; /* moved to sidebar */
+}
+#sidebar {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+#sidebar-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+#sidebar-header p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+#input-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+#input-section label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+#textInput {
+  width: 100%;
+  height: 100px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+}
+#textInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+#textInput::placeholder {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+#analyze-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, var(--accent), #d08030);
+  color: #0a0a0f;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+#analyze-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(240, 160, 64, 0.3);
+}
+#analyze-btn:active {
+  transform: translateY(0);
+}
+#results-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+#slop-score-display {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--surface2);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+#slop-score-ring {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+#slop-score-info {
+  flex: 1;
+}
+#slop-score-info .score-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+#slop-score-info .score-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+}
+#slop-score-info .score-verdict {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.tell-card {
+  margin-bottom: 10px;
+  padding: 12px;
+  background: var(--surface2);
+  border-radius: 8px;
+  border-left: 3px solid var(--border);
+  transition: border-color 0.2s;
+}
+.tell-card .tell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.tell-card .tell-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.tell-card .tell-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.tell-card .tell-example {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-style: normal;
+  line-height: 1.4;
+}
+.tell-card .tell-bar {
+  height: 3px;
+  background: var(--bg);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.tell-card .tell-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+#legend {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+#legend h3 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}
+.empty-state .icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+.empty-state p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#particles-legend.visible {
+  opacity: 1;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+#tooltip {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  max-width: 220px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+#tooltip.visible {
+  opacity: 1;
+}
+#tooltip .tip-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--accent);
+}
+#tooltip .tip-detail {
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#particles-legend.visible {
+  opacity: 1;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#particles-legend.visible {
+  opacity: 1;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#particles-legend.visible {
+  opacity: 1;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#particles-legend.visible {
+  opacity: 1;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+#particles-legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#particles-legend.visible {
+  opacity: 1;
+}
+.particle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(10, 10, 15, 0.8);
+  padding: 4px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.particle-legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="visualizer-panel">
+    <canvas id="main-canvas"></canvas>
+    <div id="title-overlay">
+      <h1>Taste-Skill</h1>
+      <div class="subtitle">AI Slop Particle Detector — Visualize what makes text feel "human" vs "AI"</div>
+    </div>
+    <div id="tooltip">
+      <div class="tip-title"></div>
+      <div class="tip-detail"></div>
+    </div>
+    <div id="particles-legend">
+      <div class="particle-legend-item"><div class="dot" style="background:#ff6060"></div> Buzzwords</div>
+      <div class="particle-legend-item"><div class="dot" style="background:#ffa030"></div> Fluff Words</div>
+      <div class="particle-legend-item"><div class="dot" style="background:#60c0e0"></div> Adverb Abuse</div>
+      <div class="particle-legend-item"><div class="dot" style="background:#a080e0"></div> Clichés</div>
+      <div class="particle-legend-item"><div class="dot" style="background:#60e0a0"></div> Human Touch</div>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2>🎨 Taste-Skill Analyzer</h2>
+      <p>Paste any text and detect AI-generated "slop" — buzzwords, fluff words, adverb abuse, and clichés.</p>
+    </div>
+    <div id="input-section">
+      <label for="textInput">Input Text</label>
+      <textarea id="textInput" placeholder="Paste text here to analyze for AI slop indicators..."></textarea>
+      <button id="analyze-btn">Analyze for Slop</button>
+    </div>
+    <div id="results-section">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">🎨</div>
+        <p>Paste some text above and hit<br><strong>Analyze for Slop</strong> to see<br>the particle visualization.</p>
+      </div>
+      <div id="results-content" style="display:none;">
+        <div id="slop-score-display">
+          <canvas id="slop-ring-canvas" width="144" height="144"></canvas>
+          <div id="slop-score-info">
+            <div class="score-label">Slop Score</div>
+            <div class="score-value" id="score-value">0%</div>
+            <div class="score-verdict" id="score-verdict">No data</div>
+          </div>
+        </div>
+        <div id="tell-cards"></div>
+      </div>
+    </div>
+    <div id="legend">
+      <h3>Particle Legend</h3>
+      <div class="legend-items">
+        <div class="legend-item"><div class="legend-dot" style="background:#ff6060"></div>Buzzwords</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffa030"></div>Fluff Words</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#60c0e0"></div>Adverb Abuse</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a080e0"></div>Clichés</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#60e0a0"></div>Human Touch</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// ============ TASTE-SILL ANALYZER ============
+const SLOP_PATTERNS = {
+  'Buzzwords': {
+    color: '#ff6060',
+    words: ['synergy', 'leveraging', 'robust', 'seamless', 'cutting-edge', 'cutting edge', 'paradigm', 'transformative', 'game-changing', 'disrupt', 'disruption', 'holistic', 'scalable', 'empower', 'ecosystem', 'innovation', 'innovative', 'landscape', 'optimize', 'optimization', 'streamline', 'streamlined', 'next-gen', 'next gen', 'best-in-class', 'world-class', 'actionable', 'mission-critical', 'value-add', 'think outside the box', 'low-hanging fruit', 'drill-down', 'deep dive', 'bandwidth', 'circle back', 'touch base', 'move the needle', 'takeaway', 'pivot', 'agile', 'blockchain', 'AI-powered', 'machine learning', 'machine learning', 'data-driven', 'data driven', 'cloud-native', 'cloud native', 'IoT', 'blockchain', 'Web3', 'metaverse', 'decentralized', 'generative AI', ' generative AI']
+  },
+  'Fluff Words': {
+    color: '#ffa030',
+    words: ['delve', 'tapestry', 'testament', 'realm', 'embark', 'journey', 'nestled', 'bustling', 'tranquil', 'treasure trove', 'rich tapestry', 'vibrant tapestry', 'a testament to', 'in the realm of', 'testament to', 'delve into', 'deep dive', 'dives into', 'in conclusion', 'to summarize', 'it is important to note', 'it is worth noting that', 'significantly', 'remarkably', 'notably', 'particularly', 'incredibly', 'absolutely', 'definitely', 'undoubtedly', 'certainly', 'truly', 'really', 'very', 'quite', 'rather', 'highly', 'extremely', 'vast', 'numerous', 'various', 'multiple', 'diverse array', 'myriad', 'multitude', ' plethora of', 'rich tapestry of', 'vibrant and dynamic', 'intricate web', 'rich and complex']
+  },
+  'Adverb Abuse': {
+    color: '#60c0e0',
+    words: ['seamlessly', 'robustly', 'transformative', 'game-changingly', 'remarkably', 'significantly', 'drastically', 'radically', 'fundamentally', 'comprehensively', 'holistically', 'paramount', 'vital', 'crucial', 'essential', 'imperative', 'indispensable', 'invaluable', 'unparalleled', 'unprecedented', 'unprecedented', 'unparalleled', 'remarkable', 'impressive', 'stunning', 'breathtaking', 'captivating', 'compelling', 'fascinating', 'intriguing', 'intriguing']
+  },
+  'Clichés': {
+    color: '#a080e0',
+    words: ['in today\'s fast-paced world', 'fast-paced world', 'at the end of the day', 'at the end of the day', 'the tip of the iceberg', 'tip of the iceberg', 'double-edged sword', 'double-edged sword', 'in a nutshell', 'in a nutshell', 'the elephant in the room', 'elephant in the room', 'the tip of the iceberg', 'tip of the iceberg', '冰山一角', '冰山一角']
+  }
+};
+
+// Remove duplicates
+for (let key in SLOP_PATTERNS) {
+  SLOP_PATTERNS[key].words = [...new Set(SLOP_PATTERNS[key].words)];
+}
+
+// ============ PARTICLE SYSTEM ============
+const canvas = document.getElementById('main-canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const tooltipTitle = tooltip.querySelector('.tip-title');
+const tooltipDetail = tooltip.querySelector('.tip-detail');
+const particlesLegend = document.getElementById('particles-legend');
+
+let particles = [];
+let mouse = { x: -1000, y: -1000 };
+let isAnalyzing = false;
+let analysisComplete = false;
+let animFrame;
+let slopScore = 0;
+let detectedTells = {};
+let particlesAnimated = false;
+
+function resizeCanvas() {
+  const panel = document.getElementById('visualizer-panel');
+  canvas.width = panel.clientWidth;
+  canvas.height = panel.clientHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+class Particle {
+  constructor(x, y, color, size, type, label) {
+    this.x = x;
+    this.y = y;
+    this.color = color;
+    this.baseSize = size;
+    this.size = size;
+    this.type = type;
+    this.label = label;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.life = 1.0;
+    this.targetX = x;
+    this.targetY = y;
+    this.arrived = false;
+    this.bobPhase = Math.random() * Math.PI * 2;
+    this.bobSpeed = 0.005 + Math.random() * 0.01;
+    this.bobAmplitude = 0.3 + Math.random() * 0.5;
+    this.glowPhase = Math.random() * Math.PI * 2;
+    this.glowSpeed = 0.01 + Math.random() * 0.02;
+    this.glowIntensity = 0.3 + Math.random() * 0.4;
+  }
+
+  update(time) {
+    this.bobPhase += this.bobSpeed;
+    this.glowPhase += this.glowSpeed;
+    const bobX = Math.sin(this.bobPhase) * this.bobAmplitude;
+    const bobY = Math.cos(this.bobPhase * 0.7) * this.bobAmplitude * 0.6;
+    const glow = this.glowIntensity + Math.sin(this.glowPhase) * 0.15;
+    const targetX = this.targetX + bobX;
+    const targetY = this.targetY + bobY;
+    this.x += (targetX - this.x) * 0.03;
+    this.y += (targetY - this.y) * 0.03;
+    this.vx += (Math.random() - 0.5) * 0.05;
+    this.vy += (Math.random() - 0.5) * 0.05;
+    this.vx *= 0.98;
+    this.vy *= 0.98;
+    this.size = this.baseSize * glow;
+  }
+
+  draw(ctx) {
+    const r = parseInt(this.color.slice(1, 3), 16);
+    const g = parseInt(this.color.slice(3, 5), 16);
+    const b = parseInt(this.color.slice(5, 7), 16);
+    const alpha = Math.min(1, this.size / this.baseSize);
+    // Glow
+    const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 3);
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.4})`);
+    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size * 3, 0, Math.PI * 2);
+    ctx.fill();
+    // Core
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  isNear(mx, my, radius) {
+    const dx = this.x - mx;
+    const dy = this.y - my;
+    return dx * dx + dy * dy < radius * radius;
+  }
+}
+
+function initParticlesFromAnalysis() {
+  particles = [];
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = W / 2;
+  const cy = H / 2;
+  const tells = Object.keys(detectedTells);
+  if (tells.length === 0) return;
+  let idx = 0;
+  for (const type of tells) {
+    const pattern = SLOP_PATTERNS[type];
+    if (!pattern) continue;
+    const count = detectedTells[type];
+    const clusterCenter = {
+      x: cx + Math.cos(idx * Math.PI * 2 / tells.length) * Math.min(W, H) * 0.2,
+      y: cy + Math.sin(idx * Math.PI * 2 / tells.length) * Math.min(W, H) * 0.2
+    };
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 60 + 10;
+      const px = clusterCenter.x + Math.cos(angle) * dist;
+      const py = clusterCenter.y + Math.sin(angle) * dist;
+      const size = 3 + Math.random() * 5;
+      const word = pattern.words[Math.floor(Math.random() * pattern.words.length)] || type;
+      particles.push(new Particle(px, py, pattern.color, size, type, word));
+      idx++;
+    }
+  }
+  // Human touch particles (clean text feel)
+  const humanCount = Math.max(5, Math.floor(20 - slopScore * 0.2));
+  for (let i = 0; i < humanCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * Math.min(W, H) * 0.35;
+    const px = cx + Math.cos(angle) * dist;
+    const py = cy + Math.sin(angle) * dist;
+    particles.push(new Particle(px, py, '#60e0a0', 2 + Math.random() * 3, 'human', '✨'));
+  }
+  particlesAnimated = false;
+}
+
+// Background grid
+function drawGrid() {
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.strokeStyle = 'rgba(40, 40, 60, 0.3)';
+  ctx.lineWidth = 0.5;
+  const spacing = 40;
+  for (let x = 0; x < W; x += spacing) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y < H; y += spacing) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+}
+
+// Central label
+function drawCenterLabel(score) {
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = W / 2;
+  const cy = H / 2;
+  const r = Math.min(W, H) * 0.15;
+  // Outer glow
+  ctx.save();
+  ctx.shadowColor = score > 60 ? '#ff4040' : score > 30 ? '#ffa030' : '#40c0a0';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = 'rgba(10, 10, 15, 0.9)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // Score text
+  ctx.fillStyle = score > 60 ? '#ff6060' : score > 30 ? '#ffa040' : '#60e0a0';
+  ctx.font = `bold ${r * 0.6}px 'Plus Jakarta Sans', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${Math.round(score)}%`, cx, cy);
+  ctx.fillStyle = '#8888a0';
+  ctx.font = `${r * 0.22}px 'Plus Jakarta Sans', sans-serif`;
+  ctx.fillText('SLOP', cx, cy + r * 0.35);
+}
+
+// Connection lines between particles of same type
+function drawConnections() {
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      if (particles[i].type !== particles[j].type) continue;
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 120) {
+        const alpha = (1 - dist / 120) * 0.15;
+        const c = particles[i].color;
+        ctx.strokeStyle = `rgba(${parseInt(c.slice(1,3),16)}, ${parseInt(c.slice(3,5),16)}, ${parseInt(c.slice(5,7),16)}, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function draw(time) {
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  // Background gradient
+  const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.7);
+  bgGrad.addColorStop(0, '#0e0e18');
+  bgGrad.addColorStop(1, '#0a0a0f');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+  drawGrid();
+  // Draw connections
+  drawConnections();
+  // Draw particles
+  if (particles.length > 0) {
+    drawConnections();
+    for (const p of particles) {
+      p.update(time);
+      p.draw(ctx);
+    }
+  }
+  // Center label
+  if (particlesAnimated && slopScore > 0) {
+    drawCenterLabel(slopScore);
+  }
+  animFrame = requestAnimationFrame(draw);
+}
+
+// ============ ANALYSIS ============
+function analyzeText(text) {
+  const lower = text.toLowerCase();
+  const words = lower.split(/\s+/);
+  const tellCounts = {};
+  const foundExamples = {};
+  // Check each pattern
+  for (const [type, pattern] of Object.entries(SLOP_PATTERNS)) {
+    let count = 0;
+    const found = [];
+    for (const word of pattern.words) {
+      const lowerWord = word.toLowerCase();
+      const regex = new RegExp(`\\b${lowerWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      const matches = text.match(regex);
+      if (matches) {
+        count += matches.length;
+        found.push(matches[0]);
+      }
+    }
+    // Also check for excessive adverb usage (-ly words)
+    if (type === 'Adverb Abuse') {
+      const adverbs = words.filter(w => w.endsWith('ly') && w.length > 4 && w !== 'ally' && w !== 'only');
+      count += adverbs.length * 0.5;
+      if (adverbs.length > 0) {
+        found.push(`...ly adverbs: ${adverbs.slice(0, 3).join(', ')}...`);
+      }
+    }
+    if (count > 0) {
+      tellCounts[type] = Math.ceil(count);
+      foundExamples[type] = found[0] || found[found.length - 1] || type;
+    }
+  }
+  const totalTells = Object.values(tellCounts).reduce((a, b) => a + b, 0);
+  const slopScore = Math.min(100, Math.round(totalTells * 15 + (words.length > 50 ? Math.min(20, (words.length - 50) * 0.4) : 0)));
+  return { tellCounts, foundExamples, slopScore };
+}
+
+function drawResults(data) {
+  detectedTells = data.tellCounts;
+  slopScore = data.slopScore;
+  // Update ring
+  drawSlopRing(data.slopScore);
+  // Update text
+  document.getElementById('score-value').textContent = `${data.slopScore}%`;
+  let verdict = '';
+  if (data.slopScore < 15) verdict = '✨ Looks human-crafted';
+  else if (data.slopScore < 35) verdict = '🤔 Some AI tells detected';
+  else if (data.slopScore < 60) verdict = '⚠️ Noticeably AI-generated';
+  else if (data.slopScore < 85) verdict = '🔥 Heavy AI slop';
+  else verdict = '🤖 Maximum slop — remove all taste';
+  document.getElementById('score-verdict').textContent = verdict;
+  // Tell cards
+  const cardsContainer = document.getElementById('tell-cards');
+  cardsContainer.innerHTML = '';
+  const colors = { 'Buzzwords': '#ff6060', 'Fluff Words': '#ffa030', 'Adverb Abuse': '#60c0e0', 'Clichés': '#a080e0' };
+  for (const [type, count] of Object.entries(data.tellCounts)) {
+    const card = document.createElement('div');
+    card.className = 'tell-card';
+    card.style.borderLeftColor = colors[type] || '#fff';
+    card.innerHTML = `
+      <div class="tell-header">
+        <span class="tell-name" style="color:${colors[type]}">${type}</span>
+        <span class="tell-count">${count} found</span>
+      </div>
+      <div class="tell-example">"${data.foundExamples[type]}"</div>
+      <div class="tell-bar"><div class="tell-bar-fill" style="width:0%;background:${colors[type]}"></div></div>
+    `;
+    cardsContainer.appendChild(card);
+    // Animate bar
+    setTimeout(() => {
+      card.querySelector('.tell-bar-fill').style.width = `${Math.min(100, count * 15)}%`;
+    }, 50);
+  }
+  // Initialize particles
+  initParticlesFromAnalysis();
+  particlesLegend.classList.add('visible');
+}
+
+function drawSlopRing(score) {
+  const c = document.getElementById('slop-ring-canvas');
+  const ctx2 = c.getContext('2d');
+  const cx2 = c.width / 2;
+  const cy2 = c.height / 2;
+  const r = 56;
+  ctx2.clearRect(0, 0, c.width, c.height);
+  // Background ring
+  ctx2.strokeStyle = '#1a1a26';
+  ctx2.lineWidth = 8;
+  ctx2.beginPath();
+  ctx2.arc(cx2, cy2, r, 0, Math.PI * 2);
+  ctx2.stroke();
+  // Score arc
+  const angle = (score / 100) * Math.PI * 2;
+  const color = score < 30 ? '#60e0a0' : score < 60 ? '#ffa030' : '#ff4040';
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = 8;
+  ctx2.lineCap = 'round';
+  ctx2.beginPath();
+  ctx2.arc(cx2, cy2, r, -Math.PI / 2, -Math.PI / 2 + angle);
+  ctx2.stroke();
+  // Glow
+  ctx2.shadowColor = color;
+  ctx2.shadowBlur = 10;
+  ctx2.beginPath();
+  ctx2.arc(cx2, cy2, r, -Math.PI / 2, -Math.PI / 2 + angle);
+  ctx2.stroke();
+  ctx2.shadowBlur = 0;
+}
+
+function animateParticles() {
+  if (!particlesAnimated) {
+    particlesAnimated = true;
+  }
+}
+
+// ============ EVENT LISTENERS ============
+document.getElementById('analyze-btn').addEventListener('click', () => {
+  const text = document.getElementById('textInput').value.trim();
+  if (!text) {
+    document.getElementById('empty-state').style.display = 'block';
+    document.getElementById('results-content').style.display = 'none';
+    return;
+  }
+  if (text.length < 10) {
+    alert('Please enter at least 10 characters to analyze.');
+    return;
+  }
+  const data = analyzeText(text);
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('results-content').style.display = 'block';
+  drawResults(data);
+  // Trigger particle animation
+  animateParticles();
+});
+
+// Mouse hover for particles
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
+  let found = false;
+  for (const p of particles) {
+    if (p.isNear(mouse.x, mouse.y, 30)) {
+      tooltipTitle.textContent = p.label;
+      tooltipDetail.textContent = `${p.type} tell`;
+      tooltip.style.left = `${e.clientX - rect.left + 12}px`;
+      tooltip.style.top = `${e.clientY - rect.top - 10}px`;
+      tooltip.classList.add('visible');
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    tooltip.classList.remove('visible');
+  }
+});
+
+canvas.addEventListener('mouseleave', () => {
+  tooltip.classList.remove('visible');
+});
+
+// Touch support
+canvas.addEventListener('touchmove', (e) => {
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = touch.clientX - rect.left;
+  mouse.y = touch.clientY - rect.top;
+  for (const p of particles) {
+    if (p.isNear(mouse.x, mouse.y, 40)) {
+      tooltipTitle.textContent = p.label;
+      tooltipDetail.textContent = `${p.type} tell`;
+      tooltip.style.left = `${touch.clientX - rect.left + 12}px`;
+      tooltip.style.top = `${touch.clientY - rect.top - 10}px`;
+      tooltip.classList.add('visible');
+      return;
+    }
+  }
+  tooltip.classList.remove('visible');
+}, { passive: true });
+
+// ============ START ANIMATION ============
+// Start with idle particles
+function initIdleParticles() {
+  const W = canvas.width;
+  const H = canvas.height;
+  for (let i = 0; i < 30; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const colors = ['#ff606040', '#ffa03040', '#60c0e040', '#a080e040', '#60e0a040'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const p = new Particle(x, y, color, 1 + Math.random() * 2, 'idle', '');
+    p.vx = (Math.random() - 0.5) * 0.5;
+    p.vy = (Math.random() - 0.5) * 0.5;
+    particles.push(p);
+  }
+}
+initIdleParticles();
+animFrame = requestAnimationFrame(draw);
+
+// ============ PRESET EXAMPLES ============
+const examples = [
+  {
+    name: '🤖 AI Slop',
+    text: 'In today\'s fast-paced world, leveraging cutting-edge synergistic solutions empowers businesses to transform their holistic ecosystem. This game-changing, disruptive innovation delivers a robust, seamless, and data-driven experience that truly moves the needle. We\'re not just leveraging the latest tech; we\'re crafting a beautifully transformative tapestry of innovation that\'s completely unparalleled in its comprehensiveness and remarkable ability to radically optimize.'
+  },
+  {
+    name: '✨ Human',
+    text: 'The garden looked different this year. The roses were taller, the tomatoes sweeter, and the fence needed painting. Sarah spent her Saturday morning mixing the paint, her coffee cooling on the windowsill. She didn\'t think about it much — she just liked the rhythm of it, the brush against wood, the quiet satisfaction of a job done.'
+  },
+  {
+    name: '📰 News',
+    text: 'The stock market rallied on Wednesday as tech shares surged. Investors said the Federal Reserve\'s decision to hold rates steady had lifted sentiment. Analysts pointed to strong earnings from several major companies, though some warned that valuations were stretched. The dollar weakened against most major currencies.'
+  }
+];
+
+// Add preset selector
+const inputSection = document.getElementById('input-section');
+const select = document.createElement('select');
+select.style.cssText = 'width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;margin-top:8px;';
+select.innerHTML = '<option value="">— Try an example —</option>' +
+  examples.map((ex, i) => `<option value="${i}">${ex.name}</option>`).join('');
+inputSection.insertBefore(select, document.getElementById('analyze-btn'));
+select.addEventListener('change', (e) => {
+  const idx = parseInt(e.target.value);
+  if (!isNaN(idx) && examples[idx]) {
+    document.getElementById('textInput').value = examples[idx].text;
+  }
+});
+</script>
+</body>
+</html>
