@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimCity 3K in 4K — Data Compression Visualizer</title>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --border: #1e1e2e;
+  --text: #c8c8d4;
+  --text-dim: #6a6a7a;
+  --accent: #5b8af5;
+  --accent2: #f5a85b;
+  --green: #5bf58a;
+  --red: #f55b6a;
+  --yellow: #f5e05b;
+  --panel: #16161e;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+header {
+  text-align: center;
+  padding: 30px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+header h1 {
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+header p {
+  color: var(--text-dim);
+  margin-top: 8px;
+  font-size: 14px;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.controls button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.controls button:hover {
+  border-color: var(--accent);
+  background: #1a1a28;
+}
+.controls button.active {
+  border-color: var(--accent);
+  background: rgba(91,138,245,0.15);
+  color: var(--accent);
+}
+.compression-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 24px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.compression-slider label {
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.compression-slider input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+.compression-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+.compression-slider .value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent2);
+  min-width: 60px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.viz-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px) {
+  .viz-grid { grid-template-columns: 1fr; }
+}
+.viz-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  overflow: hidden;
+}
+.viz-panel h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.viz-panel h3 .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+canvas {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+  image-rendering: pixelated;
+}
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+}
+.stat-card .label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.stat-card .value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card .value.blue { color: var(--accent); }
+.stat-card .value.orange { color: var(--accent2); }
+.stat-card .value.green { color: var(--green); }
+.stat-card .value.yellow { color: var(--yellow); }
+.diff-overlay {
+  position: relative;
+}
+.diff-overlay canvas {
+  border: 2px solid var(--border);
+}
+.info-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.info-section h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: var(--accent);
+}
+.info-section p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.mode-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mode-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mode-badge.original { background: rgba(91,138,245,0.15); color: var(--accent); }
+.mode-badge.compressed { background: rgba(245,168,91,0.15); color: var(--accent2); }
+.mode-badge.difference { background: rgba(245,91,106,0.15); color: var(--red); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>SimCity 3K in 4K</h1>
+    <p>Interactive data compression visualization — see how 4K resolution data compresses to 3K with minimal quality loss</p>
+  </header>
+
+  <div class="controls">
+    <button class="active" onclick="setMode('original')" id="btn-original">4K Original</button>
+    <button onclick="setMode('compressed')" id="btn-compressed">3K Compressed</button>
+    <button onclick="setMode('difference')" id="btn-difference">Difference View</button>
+    <button onclick="setMode('analysis')" id="btn-analysis">Pixel Analysis</button>
+    <button onclick="setMode('blocks')" id="btn-blocks">Block Grid</button>
+    <button onclick="animateCompression()" id="btn-animate">▶ Animate</button>
+  </div>
+
+  <div class="compression-slider">
+    <label>Compression Ratio</label>
+    <input type="range" id="compSlider" min="90" max="100" value="100" step="0.5">
+    <span class="value" id="compValue">100%</span>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="label">Original Size</div>
+      <div class="value blue" id="stat-orig">2560x1440</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Compressed Size</div>
+      <div class="value orange" id="stat-comp">2048x1152</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Size Reduction</div>
+      <div class="value green" id="stat-reduction">0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Quality Loss</div>
+      <div class="value yellow" id="stat-quality">0.00</div>
+    </div>
+  </div>
+
+  <div class="viz-grid">
+    <div class="viz-panel">
+      <h3><span class="dot" style="background:var(--accent)"></span> Full Resolution View</h3>
+      <canvas id="mainCanvas" width="512" height="288"></canvas>
+    </div>
+    <div class="viz-panel">
+      <h3><span class="dot" style="background:var(--accent2)"></span> Compression Detail</h3>
+      <canvas id="detailCanvas" width="256" height="144"></canvas>
+    </div>
+  </div>
+
+  <div class="viz-grid" id="diffSection" style="display:none">
+    <div class="viz-panel diff-overlay">
+      <h3><span class="dot" style="background:var(--red)"></span> Pixel Difference Map</h3>
+      <canvas id="diffCanvas" width="512" height="288"></canvas>
+    </div>
+    <div class="viz-panel">
+      <h3><span class="dot" style="background:var(--green)"></span> Block Structure</h3>
+      <canvas id="blockCanvas" width="256" height="256"></canvas>
+    </div>
+  </div>
+
+  <div class="info-section">
+    <h3>📊 About SimCity 3K in 4K</h3>
+    <p>
+      Inspired by the HN discussion about compressing 4K video to 3K resolution with minimal quality loss.
+      This interactive demo simulates the compression pipeline: original data → resize → quality reduction → reconstruction.
+      Adjust the compression slider and switch between views to see how different compression ratios affect the visual output.
+      The block grid view reveals how pixels merge during downscaling, and the difference map highlights exactly where detail is lost.
+    </p>
+  </div>
+</div>
+
+<script>
+// Seeded PRNG for deterministic city generation
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 64 | t) | 0;
+    t = t ^ t >>> 14;
+    return (t >>> 0) / 4294967296;
+  }
+}
+
+const SEED = 42;
+const rng = mulberry32(SEED);
+
+// City data generation
+const CITY_W = 2560;
+const CITY_H = 1440;
+const COMPRESSED_W = 2048;
+const COMPRESSED_H = 1152;
+
+// Generate city map with buildings, roads, parks, water
+let originalPixels = [];
+let compressedPixels = [];
+let compressedData = null;
+
+function generateCity(seed) {
+  const r = mulberry32(seed);
+  const pixels = new Uint8ClampedArray(CITY_W * CITY_H * 4);
+
+  // Sky gradient
+  for (let y = 0; y < CITY_H; y++) {
+    for (let x = 0; x < CITY_W; x++) {
+      const t = y / CITY_H;
+      const idx = (y * CITY_W + x) * 4;
+      // Dawn/sky gradient
+      pixels[idx] = Math.floor(20 + t * 10);
+      pixels[idx+1] = Math.floor(20 + t * 15);
+      pixels[idx+2] = Math.floor(50 + t * 40);
+      pixels[idx+3] = 255;
+    }
+  }
+
+  // Water bodies (bottom area)
+  for (let y = Math.floor(CITY_H * 0.65); y < CITY_H; y++) {
+    for (let x = 0; x < CITY_W; x++) {
+      const t = (y - CITY_H * 0.65) / (CITY_H * 0.35);
+      const idx = (y * CITY_W + x) * 4;
+      const wave = Math.sin(x * 0.02 + r() * 10) * 0.3 + t * 0.7;
+      pixels[idx] = Math.floor(10 + (1-t) * 30);
+      pixels[idx+1] = Math.floor(40 + t * 60);
+      pixels[idx+2] = Math.floor(100 + t * 80);
+      pixels[idx+3] = 255;
+    }
+  }
+
+  // Ground/terrain
+  for (let y = Math.floor(CITY_H * 0.35); y < Math.floor(CITY_H * 0.65); y++) {
+    for (let x = 0; x < CITY_W; x++) {
+      const t = (y - CITY_H * 0.35) / (CITY_H * 0.3);
+      const idx = (y * CITY_W + x) * 4;
+      const noise = (r() - 0.5) * 5;
+      pixels[idx] = Math.floor(40 + noise);
+      pixels[idx+1] = Math.floor(55 + noise);
+      pixels[idx+2] = Math.floor(35 + noise);
+      pixels[idx+3] = 255;
+    }
+  }
+
+  // Buildings - placed in upper city area
+  const buildings = [];
+  for (let i = 0; i < 200; i++) {
+    const bx = Math.floor(r() * CITY_W);
+    const by = Math.floor(CITY_H * 0.38 + r() * CITY_H * 0.25);
+    const bw = 10 + Math.floor(r() * 40);
+    const bh = 15 + Math.floor(r() * 80);
+    buildings.push({ x: bx, y: by, w: bw, h: bh, type: r() });
+  }
+
+  buildings.forEach(b => {
+    for (let y = by; y < by + b.h && y < CITY_H * 0.65; y++) {
+      for (let x = bx; x < bx + b.w && x < CITY_W; x++) {
+        const idx = (y * CITY_W + x) * 4;
+        const brightness = 60 + Math.floor((r() * 40));
+        pixels[idx] = Math.floor(brightness * 0.8);
+        pixels[idx+1] = Math.floor(brightness * 0.85);
+        pixels[idx+2] = Math.floor(brightness);
+        pixels[idx+3] = 255;
+
+        // Window lights
+        if ((x - bx) % 5 === 2 && (y - by) % 7 === 3) {
+          const lit = r() > 0.4;
+          if (lit) {
+            pixels[idx] = 220;
+            pixels[idx+1] = 200;
+            pixels[idx+2] = 120;
+          }
+        }
+      }
+    }
+  });
+
+  // Roads (horizontal and vertical lines)
+  for (let i = 0; i < 8; i++) {
+    const roadY = Math.floor(CITY_H * 0.35 + r() * CITY_H * 0.28);
+    for (let x = 0; x < CITY_W; x++) {
+      const idx = (roadY * CITY_W + x) * 4;
+      pixels[idx] = 30; pixels[idx+1] = 30; pixels[idx+2] = 30; pixels[idx+3] = 255;
+      // Dashed line
+      if (x % 40 < 20) {
+        pixels[idx] = 180; pixels[idx+1] = 180; pixels[idx+2] = 60;
+      }
+    }
+  }
+
+  for (let i = 0; i < 12; i++) {
+    const roadX = Math.floor(r() * CITY_W);
+    for (let y = Math.floor(CITY_H * 0.35); y < Math.floor(CITY_H * 0.65); y++) {
+      const idx = (y * CITY_W + roadX) * 4;
+      pixels[idx] = 30; pixels[idx+1] = 30; pixels[idx+2] = 30; pixels[idx+3] = 255;
+      if (y % 30 < 15) {
+        pixels[idx] = 180; pixels[idx+1] = 180; pixels[idx+2] = 60;
+      }
+    }
+  }
+
+  // Parks (green patches)
+  for (let i = 0; i < 15; i++) {
+    const px = Math.floor(r() * (CITY_W - 60));
+    const py = Math.floor(CITY_H * 0.38 + r() * CITY_H * 0.2);
+    const pr = 10 + Math.floor(r() * 25);
+    for (let y = py - pr; y < py + pr && y < CITY_H * 0.65; y++) {
+      for (let x = px - pr; x < px + pr && x < CITY_W; x++) {
+        const dx = x - px, dy = y - py;
+        if (dx*dx + dy*dy < pr*pr) {
+          const idx = (y * CITY_W + x) * 4;
+          pixels[idx] = 20 + Math.floor(r() * 20);
+          pixels[idx+1] = 80 + Math.floor(r() * 40);
+          pixels[idx+2] = 20 + Math.floor(r() * 20);
+          pixels[idx+3] = 255;
+        }
+      }
+    }
+  }
+
+  // Stars in sky
+  for (let i = 0; i < 500; i++) {
+    const sx = Math.floor(r() * CITY_W);
+    const sy = Math.floor(r() * CITY_H * 0.3);
+    const idx = (sy * CITY_W + sx) * 4;
+    pixels[idx] = 255; pixels[idx+1] = 255; pixels[idx+2] = 255;
+  }
+
+  return pixels;
+}
+
+// Compress city data
+function compressCity(src, sw, sh, dw, dh) {
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = sw; srcCanvas.height = sh;
+  const sctx = srcCanvas.getContext('2d');
+  const srcImg = sctx.createImageData(sw, sh);
+  srcImg.data.set(src);
+  sctx.putImageData(srcImg, 0, 0);
+
+  const dstCanvas = document.createElement('canvas');
+  dstCanvas.width = dw; dstCanvas.height = dh;
+  const dctx = dstCanvas.getContext('2d');
+  dctx.drawImage(srcCanvas, 0, 0, dw, dh);
+
+  const img = dctx.getImageData(0, 0, dw, dh);
+  return img.data;
+}
+
+// Main rendering
+let currentMode = 'original';
+let animating = false;
+let animFrame = 100;
+let compressionLevel = 100;
+
+const mainCanvas = document.getElementById('mainCanvas');
+const mainCtx = mainCanvas.getContext('2d');
+const detailCanvas = document.getElementById('detailCanvas');
+const detailCtx = detailCanvas.getContext('2d');
+const diffCanvas = document.getElementById('diffCanvas');
+const diffCtx = diffCanvas.getContext('2d');
+const blockCanvas = document.getElementById('blockCanvas');
+const blockCtx = blockCanvas.getContext('2d');
+
+// Generate original city
+originalPixels = generateCity(SEED);
+
+// Display function
+function display(mode) {
+  const sw = mainCanvas.width;
+  const sh = mainCanvas.height;
+  const cw = Math.floor(sw * compressionLevel / 100);
+  const ch = Math.floor(sh * compressionLevel / 100);
+
+  // For mode display, we render at reduced resolution
+  if (mode === 'original' || mode === 'compressed' || mode === 'difference') {
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = sw;
+    tmpCanvas.height = sh;
+    const tmpCtx = tmpCanvas.getContext('2d');
+
+    if (mode === 'original') {
+      // Render original city
+      const origImg = tmpCtx.createImageData(sw, sh);
+      for (let i = 0; i < sw * sh * 4; i++) {
+        origImg.data[i] = originalPixels[i % originalPixels.length];
+      }
+      tmpCtx.putImageData(origImg, 0, 0);
+      mainCtx.drawImage(tmpCanvas, 0, 0, sw, sh);
+    } else if (mode === 'compressed') {
+      // Render compressed (resampled) version
+      const cData = compressCity(originalPixels, sw, sh, cw, ch);
+      const cCanvas = document.createElement('canvas');
+      cCanvas.width = cw; cCanvas.height = ch;
+      const cCtx = cCanvas.getContext('2d');
+      const cImg = cCtx.createImageData(cw, ch);
+      cImg.data.set(cData);
+      cCtx.putImageData(cImg, 0, 0);
+      mainCtx.drawImage(cCanvas, 0, 0, sw, sh);
+    } else if (mode === 'difference') {
+      // Show difference between original and compressed
+      const cData = compressCity(originalPixels, sw, sh, cw, ch);
+      const diffImg = diffCtx.createImageData(sw, sh);
+      for (let i = 0; i < sw * sh * 4; i++) {
+        const diff = Math.abs(originalPixels[i] - cData[i % cData.length]);
+        diffImg.data[i] = diff;
+        diffImg.data[i+1] = diff;
+        diffImg.data[i+2] = diff;
+        diffImg.data[3] = 255;
+      }
+      diffCtx.putImageData(diffImg, 0, 0);
+      mainCtx.drawImage(diffCanvas, 0, 0, sw, sh);
+    }
+  }
+
+  // Detail view: zoom into a region
+  const dz = 64;
+  const dOffX = Math.floor((sw - dz) / 2);
+  const dOffY = Math.floor((sh - dz) / 2);
+
+  // Show a zoomed region with pixel grid
+  detailCtx.clearRect(0, 0, 256, 144);
+  detailCtx.fillStyle = '#0a0a0f';
+  detailCtx.fillRect(0, 0, 256, 144);
+
+  // Draw pixel grid overlay
+  const grid = 8;
+  for (let gy = 0; gy < dz; gy += grid) {
+    for (let gx = 0; gx < dz; gx += grid) {
+      const px = (dOffX + gx) % sw;
+      const py = (dOffY + gy) % sh;
+      const si = (py * sw + px) * 4;
+      detailCtx.fillStyle = `rgb(${originalPixels[si%4]},${originalPixels[(si+1)%4]},${originalPixels[(si+2)%4]})`;
+      detailCtx.fillRect(
+        ((gx - (dz-dz)/2) / dz * 256 + 256/2 - dz/2) + gx * (256/dz),
+        ((gy - (dz-dz)/2) / dz * 144 + 144/2 - dz/2) + gy * (144/dz),
+        grid * (256/dz), grid * (144/dz)
+      );
+    }
+  }
+
+  // Draw compressed overlay
+  const compCanvas = document.createElement('canvas');
+  compCanvas.width = cw; compCanvas.height = ch;
+  const compCtx = compCanvas.getContext('2d');
+  const compImg = compCtx.createImageData(cw, ch);
+  compImg.data.set(compressCity(originalPixels, sw, sh, cw, ch));
+  compCtx.putImageData(compImg, 0, 0);
+  detailCtx.drawImage(compCanvas, (256-dz)/2, (144-dz)/2, dz, dz);
+
+  // Block structure view
+  blockCtx.clearRect(0, 0, 256, 256);
+  blockCtx.fillStyle = '#0a0a0f';
+  blockCtx.fillRect(0, 0, 256, 256);
+
+  const blockSize = Math.max(4, Math.floor(256 / Math.sqrt(Math.max(1, Math.floor(cw * ch / 128)))));
+  const cols = Math.floor(256 / blockSize);
+  const rows = Math.floor(256 / blockSize);
+
+  for (let by = 0; by < rows; by++) {
+    for (let bx = 0; bx < cols; bx++) {
+      const sx = Math.floor(bx / cols * cw);
+      const sy = Math.floor(by / rows * ch);
+      const ci = (sy * cw + sx) * 4;
+      blockCtx.fillStyle = `rgb(${cData[ci%4]||0},${cData[(ci+1)%4]||0},${cData[(ci+2)%4]||0})`;
+      blockCtx.fillRect(bx * blockSize, by * blockSize, blockSize, blockSize);
+    }
+  }
+}
+
+let cData = null;
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + mode)?.classList.add('active');
+  animate();
+}
+
+function animate() {
+  compressionLevel = parseInt(document.getElementById('compSlider').value);
+  document.getElementById('compValue').textContent = compressionLevel + '%';
+
+  const ratio = 100 - compressionLevel;
+  document.getElementById('stat-reduction').textContent = ratio.toFixed(1) + '%';
+  document.getElementById('stat-quality').textContent = (ratio * 0.01).toFixed(2);
+
+  if (compressionLevel <= 95) {
+    cData = compressCity(originalPixels, mainCanvas.width, mainCanvas.height,
+      Math.floor(mainCanvas.width * compressionLevel / 100),
+      Math.floor(mainCanvas.height * compressionLevel / 100));
+  }
+
+  display(currentMode);
+
+  if (animating) {
+    animFrame = Math.max(80, animFrame - 2);
+    setTimeout(animate, animFrame);
+  }
+}
+
+function animateCompression() {
+  animating = !animating;
+  const btn = document.getElementById('btn-animate');
+  btn.textContent = animating ? '⏸ Pause' : '▶ Animate';
+  if (animating) {
+    let dir = -1;
+    const loop = () => {
+      let slider = document.getElementById('compSlider');
+      let val = parseInt(slider.value);
+      val += dir;
+      if (val <= 90) { dir = 1; }
+      if (val >= 100) { dir = -1; }
+      slider.value = val;
+      if (animating) loop();
+    };
+    loop();
+  }
+}
+
+// Initial render
+cData = compressCity(originalPixels, mainCanvas.width, mainCanvas.height,
+  Math.floor(mainCanvas.width), Math.floor(mainCanvas.height));
+display('original');
+
+// Slider event
+document.getElementById('compSlider').addEventListener('input', () => {
+  compressionLevel = parseInt(document.getElementById('compSlider').value);
+  cData = compressCity(originalPixels, mainCanvas.width, mainCanvas.height,
+    Math.floor(mainCanvas.width * compressionLevel / 100),
+    Math.floor(mainCanvas.height * compressionLevel / 100));
+  display(currentMode);
+});
+</script>
+</body>
+</html>
